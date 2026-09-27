@@ -16,6 +16,8 @@ from typing import Callable
 from .config import SendConfig
 from .runner import ToolError
 
+MAX_PENDING = 10
+
 
 @dataclass(frozen=True)
 class PendingSend:
@@ -63,6 +65,10 @@ class SendGate:
             raise ToolError(f"message too long ({len(msg)} chars, max {self.config.max_length})")
 
         self._purge_expired()
+        if len(self._pending) >= MAX_PENDING:
+            raise ToolError(
+                f"Too many pending sends ({MAX_PENDING}). Confirm or let them expire first."
+            )
         pending = PendingSend(
             token=secrets.token_hex(4),
             alias=alias,

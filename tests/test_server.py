@@ -113,6 +113,18 @@ def test_token_expires():
         gate.take(p.token, "a", "hi")
 
 
+def test_pending_sends_are_capped():
+    from kakao_mcp.config import SendConfig
+    from kakao_mcp.runner import ToolError
+    from kakao_mcp.sendgate import MAX_PENDING, SendGate
+
+    gate = SendGate(SendConfig(enabled=True, allowed_chats={"a": "A"}))
+    for i in range(MAX_PENDING):
+        gate.prepare("a", f"m{i}")
+    with pytest.raises(ToolError, match="Too many pending"):
+        gate.prepare("a", "one more")
+
+
 def test_missing_binary_gives_clear_error(tmp_path, monkeypatch):
     monkeypatch.setattr("kakao_mcp.config.DEPS_BIN_DIR", tmp_path / "nope")
     monkeypatch.setenv("PATH", str(tmp_path))
