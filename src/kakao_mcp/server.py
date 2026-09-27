@@ -12,6 +12,7 @@ from typing import Any
 from mcp.server.mcpserver import MCPServer
 from mcp_types import ToolAnnotations
 
+from . import keyderive
 from .config import Config, load_config
 from .runner import KakaoCli, Kmsg, ToolError
 from .sendgate import SendGate
@@ -43,7 +44,13 @@ def create_server(
     kmsg: Kmsg | None = None,
     gate: SendGate | None = None,
 ) -> MCPServer:
-    cli = kakaocli or KakaoCli(config.kakaocli_path)
+    if kakaocli is None:
+        resolve_db = None
+        if config.user_id is not None:
+            user_id = config.user_id
+            resolve_db = lambda: keyderive.resolve_database(user_id)  # noqa: E731
+        kakaocli = KakaoCli(config.kakaocli_path, resolve_db=resolve_db)
+    cli = kakaocli
     sender = kmsg or Kmsg(config.kmsg_path)
     gate = gate or SendGate(config.send)
     excluded = config.read.exclude_chat_ids

@@ -82,6 +82,7 @@ cp config.example.json ~/.config/kakao-mcp/config.json
 ```
 
 - `*_path`가 `null`이면 `~/.local/share/kakao-mcp/bin` → `PATH` 순서로 찾습니다.
+- `user_id`: 보통은 `null`로 두면 kakaocli가 알아서 찾습니다. `kakaocli auth`가 "User ID: auto-detection failed"로 실패하는 경우에만, 카카오 **내부 숫자 사용자 ID**(카카오톡 ID와 다름)를 넣으세요. 그러면 kakao-mcp가 DB 경로와 키를 직접 계산해 `--db`/`--key`로 넘깁니다. 이때 키가 실행 중 잠시 프로세스 목록에 보이며, 에러 메시지에서는 가려집니다. 값이 맞는지는 `kakaocli auth --user-id <ID>`로 확인할 수 있습니다.
 - `allowed_chats`의 값은 kmsg가 카카오톡에서 검색할 **정확한 채팅방 이름**입니다. 이름이 비슷한 방이 여럿이면 오발송 위험이 있으니 고유한 이름을 쓰세요.
 
 ## Claude Code에 등록

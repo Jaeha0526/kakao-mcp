@@ -10,6 +10,9 @@ FAKE_KAKAOCLI = r'''#!{python}
 import json, os, sys
 with open(os.environ["FAKE_LOG"], "a") as f:
     f.write(json.dumps(["kakaocli", *sys.argv[1:]]) + "\n")
+if os.environ.get("FAKE_FAIL"):
+    print("error with args: " + " ".join(sys.argv[1:]), file=sys.stderr)
+    sys.exit(1)
 cmd = sys.argv[1]
 if cmd == "chats":
     print(json.dumps([

@@ -42,6 +42,9 @@ class Config:
     kmsg_path: str | None
     read: ReadConfig
     send: SendConfig
+    # KakaoTalk internal numeric user id. Only needed when kakaocli cannot
+    # auto-detect it; kakao-mcp then derives the DB key and passes --db/--key.
+    user_id: int | None = None
 
 
 def _resolve_binary(configured: str | None, name: str) -> str | None:
@@ -85,6 +88,8 @@ def load_config(path: Path | None = None) -> Config:
             max_length=int(send_raw.get("max_length", 1000)),
             confirm_ttl_seconds=int(send_raw.get("confirm_ttl_seconds", 300)),
         )
+        user_id = raw.get("user_id")
+        user_id = int(user_id) if user_id not in (None, "") else None
     except (TypeError, ValueError) as e:
         raise ConfigError(f"Invalid value in config {path}: {e}") from e
 
@@ -93,4 +98,5 @@ def load_config(path: Path | None = None) -> Config:
         kmsg_path=_resolve_binary(raw.get("kmsg_path"), "kmsg"),
         read=read,
         send=send,
+        user_id=user_id,
     )
