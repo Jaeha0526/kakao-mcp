@@ -1,0 +1,24 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+dist/
+build/
+*.egg-info/
+
+# Local config / personal data — never commit
+config.json
+chats.json
+*.db
+*.sqlite
+*.log
+.env
+
+# Dependency builds (scripts/install-deps.sh)
+.deps/
+
+.DS_Store
+
+# Local agent tooling state
+.omc/

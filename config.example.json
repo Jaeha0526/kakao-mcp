@@ -1,0 +1,16 @@
+{
+  "kakaocli_path": null,
+  "kmsg_path": null,
+  "read": {
+    "exclude_chat_ids": [],
+    "max_messages": 200
+  },
+  "send": {
+    "enabled": false,
+    "allowed_chats": {
+      "me": "Exact chat name as shown in KakaoTalk"
+    },
+    "max_length": 1000,
+    "confirm_ttl_seconds": 300
+  }
+}
