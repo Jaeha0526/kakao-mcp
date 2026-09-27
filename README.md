@@ -260,7 +260,7 @@ kakao-mcp (Python, 이 레포)
 ```
 
 - **[kakaocli](https://github.com/silver-flight-group/kakaocli)** — 카카오톡 DB를 복호화해 읽는 CLI. 이 프로젝트는 [포크](https://github.com/Jaeha0526/kakaocli/tree/kakao-mcp)를 사용합니다. 원본 v0.6.0에 다음을 더했습니다:
-  - `history` 명령: `(sentAt, logId)` 키셋 커서 페이지네이션, 기간·검색·제외 필터, 첨부 정보 포함 JSON. **모든 값은 SQL 바인딩**으로 전달됩니다.
+  - `history` 명령: `(sentAt, logId)` 키셋 커서 페이지네이션, 기간·검색·제외 필터, 첨부 정보 포함 JSON. **모든 값은 SQL 바인딩**으로 전달됩니다. 원본에 [PR #28](https://github.com/silver-flight-group/kakaocli/pull/28)로 제출했으며, 머지되면 원본으로 돌아갈 예정입니다.
   - [upstream PR #26](https://github.com/silver-flight-group/kakaocli/pull/26): 사용자 ID 탐색 병렬화 (+ 잠금 경합 수정)
 - **[kmsg](https://github.com/channprj/kmsg)** — 카카오톡 UI를 조작해 메시지를 보내는 CLI (원본 그대로 사용).
 
