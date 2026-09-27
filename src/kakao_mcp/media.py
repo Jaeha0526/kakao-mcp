@@ -16,12 +16,14 @@ from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlparse
 
-from .messages import load_attachment, type_name
+from .messages import emoticon_path, load_attachment, type_name
 from .runner import ToolError
 
 DEFAULT_CACHE_DIR = Path.home() / "Library" / "Caches" / "kakao-mcp" / "attachments"
+EMOTICON_CDN = "https://item.kakaocdn.net/dw/"
 ALLOWED_HOST_SUFFIXES = (".kakaocdn.net", ".kakao.com")
 IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".heic", ".bmp", ".tiff"}
+IMAGE_KINDS = {"photo", "photos", "emoticon"}
 PREVIEW_MAX_PX = 1568
 CONTENT_TYPE_EXT = {
     "image/jpeg": ".jpg",
@@ -121,6 +123,14 @@ def fetch_attachment(
     elif kind == "file":
         urls = [a.get("url")]
         name = a.get("name")
+    elif kind == "emoticon" and (path := emoticon_path(a)):
+        # Public store images at item.kakaocdn.net/dw/. Static emoticons
+        # (emot_NNN.png) are plain PNGs; animated ones (.gif/.webp) are served
+        # obfuscated, so use their plain still thumbnail (thum_NNN.png) instead.
+        if not path.endswith(".png"):
+            path = path.replace(".emot_", ".thum_").rsplit(".", 1)[0] + ".png"
+        urls = [EMOTICON_CDN + path]
+        name = path
     else:
         raise ToolError(f"Message {row.get('log_id')} is a '{kind}' message and has no attachment to fetch.")
 
@@ -152,7 +162,7 @@ def fetch_attachment(
             path = folder / (stem + suffix.lower())
             os.replace(tmp, path)
 
-    is_image = kind in ("photo", "photos") or path.suffix.lower() in IMAGE_EXTS
+    is_image = kind in IMAGE_KINDS or path.suffix.lower() in IMAGE_EXTS
     return Fetched(
         kind=kind,
         path=path,

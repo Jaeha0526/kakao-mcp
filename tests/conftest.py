@@ -85,6 +85,18 @@ def fake_messages():
     for log_id, code, att in ((105, 2, PHOTO), (106, 27, PHOTOS), (107, 18, FILE), (108, 2, EVIL)):
         r = rows[log_id - 100]
         r.update(type_code=code, attachment=att, text=None)
+    rows[109 - 100].update(type_code=26, text="reply text",
+                           attachment=json.dumps({"src_logId": 102, "src_userId": 42, "src_message": "msg 2"}))
+    rows[110 - 100].update(reactions=json.dumps({"2": 3, "4": 1}), my_reaction=json.dumps({"my": 2}),
+                           emoticon_reactions=json.dumps({"rx": [{"k": 2, "o": "1200509_029", "c": 2, "a": {"ko": "사랑"}},
+                                                                 {"k": 2, "o": "1200509_021", "c": 0, "a": {"ko": "엄지척"}}]}),
+                           my_emoticon_reactions=json.dumps({"myRx": [{"k": 2, "o": "1200509_029"}]}))
+    rows[112 - 100].update(type_code=20, text=None, attachment=json.dumps(
+        {"name": "(이모티콘)", "alt": "카카오 이모티콘", "path": "4446261.emot_005.webp",
+         "emoticonItemPath": "4446261.emot_005.webp"}))
+    rows[113 - 100].update(type_code=12, text="hi", attachment=json.dumps(
+        {"name": "(emoticon)", "path": "2212560.emot_051.png", "emoticonItemPath": "2212560.emot_051.png"}))
+    rows[114 - 100].update(type_code=12, text=None, attachment=json.dumps({"path": "../../etc/passwd"}))
     for i in range(3):
         rows.append({"log_id": 200 + i, "chat_id": 2, "sender_id": 7, "sender": "Bob", "type_code": 1,
                      "sent_at": T0 + i * 60, "is_from_me": False, "text": "hidden lunch"})

@@ -7,9 +7,10 @@ set -euo pipefail
 
 # Fork of silver-flight-group/kakaocli v0.6.0 (8b6ffcf, reviewed 2026-09-26) plus
 # the `history` command (cursor pagination + attachments) that kakao-mcp needs
-# and upstream PR #26 (parallel user id detection).
+# (+ reactions), upstream PR #26 (parallel user id detection) and the chat
+# naming commit from upstream PR #25 (no more "(unknown)" group chats).
 KAKAOCLI_REPO="https://github.com/Jaeha0526/kakaocli.git"
-KAKAOCLI_COMMIT="c0fce229f5428bb16cfb7ff7052626368fa8cc2c"  # branch kakao-mcp
+KAKAOCLI_COMMIT="2c74e63d2c8846c50d8eb1895eb6d835bfef4bc9"  # branch kakao-mcp
 
 KMSG_REPO="https://github.com/channprj/kmsg.git"
 KMSG_COMMIT="54cbff790b409214735ef365a621d791034fe500"      # v1.260921.0, reviewed 2026-09-26

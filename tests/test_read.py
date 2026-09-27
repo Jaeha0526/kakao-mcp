@@ -245,3 +245,50 @@ def test_send_description_reflects_config(make_config):
 def test_disabled_send_tells_agent_not_to_edit_config(make_config):
     server = create_server(make_config())
     assert "do not modify the config" in call_err(server, "kakao_prepare_send", chat="me", message="hi")
+
+
+def _by_id(server, **cfg):
+    _, page = call(server, "kakao_read_messages", chat_id="1", limit=100)
+    return {m["message_id"]: m for m in page["messages"]}
+
+
+def test_reactions_are_listed(make_config):
+    by_id = _by_id(create_server(make_config()))
+    assert by_id["110"]["reactions"] == [
+        {"reaction": "like", "code": 2, "count": 3, "mine": True},
+        {"reaction": "laugh", "code": 4, "count": 1, "mine": False},
+        {"emoticon": "사랑", "count": 2, "mine": True},
+    ]  # zero-count emoticon reaction dropped
+    assert "reactions" not in by_id["100"]
+
+
+def test_reply_shows_the_quoted_message(make_config, fakes):
+    from kakao_mcp.runner import KakaoCli
+
+    def server_as(uid):  # explicit KakaoCli so user_id doesn't trigger real DB lookup
+        return create_server(make_config({"user_id": uid}), kakaocli=KakaoCli(fakes["kakaocli"]))
+
+    assert _by_id(server_as(42))["109"]["reply_to"] == {"message_id": "102", "text": "msg 2", "from_me": True}
+    assert _by_id(server_as(7))["109"]["reply_to"]["from_me"] is False
+
+
+def test_emoticons_have_a_summary_and_bad_paths_are_ignored(make_config):
+    by_id = _by_id(create_server(make_config()))
+    assert by_id["112"]["attachment"] == {"kind": "emoticon", "id": "4446261", "description": "카카오 이모티콘"}
+    assert by_id["113"]["attachment"] == {"kind": "emoticon", "id": "2212560"}
+    assert "attachment" not in by_id["114"]
+
+
+def test_emoticon_fetch_uses_store_png(make_config, tmp_path):
+    dl = _fake_downloader({
+        "https://item.kakaocdn.net/dw/4446261.thum_005.png": (_tiny_png(), "image/png"),
+        "https://item.kakaocdn.net/dw/2212560.emot_051.png": (_tiny_png(), "image/png"),
+    })
+    server = create_server(make_config(), downloader=dl, cache_dir=tmp_path)
+    animated = call_raw(server, "kakao_get_attachment", chat_id="1", message_id="112")
+    static = call_raw(server, "kakao_get_attachment", chat_id="1", message_id="113")
+    assert json.loads(animated.content[0].text)["kind"] == "emoticon"
+    assert animated.content[1].type == "image" and static.content[1].type == "image"
+    assert dl.calls == ["https://item.kakaocdn.net/dw/4446261.thum_005.png",
+                        "https://item.kakaocdn.net/dw/2212560.emot_051.png"]
+    assert "no attachment" in call_err(server, "kakao_get_attachment", chat_id="1", message_id="114")

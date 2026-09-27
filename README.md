@@ -5,7 +5,8 @@ macOS 카카오톡을 Claude 같은 AI 에이전트가 **MCP 도구**로 읽고(
 *A personal KakaoTalk MCP server for macOS: read whole chats from the local DB with cursor pagination, fetch photos/files, and send through a gated, allowlisted two-step flow.*
 
 - **읽기**: 카카오톡 Mac 앱의 로컬 DB를 **읽기 전용**으로 조회합니다. 카카오톡 창을 띄우지 않고 **읽음 처리도 되지 않습니다.** 대화방을 처음부터 끝까지 페이지 단위로 읽을 수 있습니다.
-- **첨부**: 사진·파일·동영상·음성을 `message_id`로 가져옵니다. 사진은 에이전트가 직접 볼 수 있는 이미지로 반환됩니다.
+- **메시지 맥락**: 답장이 어떤 메시지에 대한 것인지(`reply_to`), 공감·이모티콘 리액션(`reactions`)까지 함께 보여 줍니다. 단톡방도 카카오톡 앱과 같은 이름으로 표시됩니다.
+- **첨부**: 사진·파일·동영상·음성·이모티콘을 `message_id`로 가져옵니다. 사진과 이모티콘은 에이전트가 직접 볼 수 있는 이미지로 반환됩니다.
 - **보내기**: 기본 **꺼짐**. 켜더라도 허용한 채팅방에만, **준비 → 사용자 승인 → 확정** 2단계로만 보냅니다.
 
 > 비공식 도구입니다. 카카오 공식 API가 아니며 카카오톡 업데이트로 언제든 동작하지 않을 수 있습니다. 대량 발송·스팸 등 남용에 따른 책임은 사용자에게 있습니다.
@@ -113,7 +114,11 @@ claude mcp add kakao -s user -- uv --directory ~/code/kakao-mcp run kakao-mcp
 |---|---|---|
 | `limit` | 30 | 가져올 방 수 (최대 200) |
 
-최근 활동순으로 `chat_id`, `name`, `type`, `members`, `unread`, `last_message_at`를 반환합니다. 단톡방은 이름이 `(unknown)`으로 나올 수 있습니다 → 멤버 수·최근 활동 시각을 보거나, `kakao_read_messages(chat_id, limit=20)`로 누가 말하는지 확인하거나, 기억나는 문구로 `kakao_search`를 쓰세요.
+최근 활동순으로 `chat_id`, `name`, `type`, `members`, `unread`, `last_message_at`를 반환합니다.
+
+- `name`은 카카오톡 채팅 목록에 보이는 이름과 같습니다: 방 제목 → 오픈채팅 이름 → 1:1 상대 → 이름 없는 단톡방은 멤버 이름을 `, `로 연결.
+- `type`: `direct`(1:1), `group`(단톡), `self`(**나와의 채팅** — 내 프로필 이름으로 표시), `unknown`(오픈채팅 등).
+- 이름은 고유하지 않을 수 있으니, 헷갈리면 `members`·`last_message_at`를 보거나 몇 개 읽어 확인하세요.
 
 ### `kakao_read_messages` — 메시지 읽기 (페이지네이션)
 
@@ -137,7 +142,12 @@ claude mcp add kakao -s user -- uv --directory ~/code/kakao-mcp run kakao-mcp
     {"message_id": "3517…", "time": "2026-09-26T21:50:03+09:00", "sender": "홍길동",
      "type": "text", "text": "…"},
     {"message_id": "3518…", "time": "…", "sender": "me", "type": "photo", "text": null,
-     "attachment": {"kind": "photo", "width": 3024, "height": 4032, "size": 5423555, "expired": false}}
+     "attachment": {"kind": "photo", "width": 3024, "height": 4032, "size": 5423555, "expired": false},
+     "reactions": [{"emoticon": "사랑", "count": 2, "mine": false}]},
+    {"message_id": "3519…", "time": "…", "sender": "홍길동", "type": "reply", "text": "좋아요!",
+     "reply_to": {"message_id": "3517…", "text": "내일 점심 어때요?", "from_me": true}},
+    {"message_id": "3520…", "time": "…", "sender": "홍길동", "type": "emoticon", "text": null,
+     "attachment": {"kind": "emoticon", "id": "4446261", "description": "카카오 이모티콘"}}
   ],
   "older_cursor": "1790000000.3517…",
   "newer_cursor": null
@@ -157,6 +167,16 @@ claude mcp add kakao -s user -- uv --directory ~/code/kakao-mcp run kakao-mcp
 
 `type` 값: `text`, `photo`, `photos`(여러 장), `video`, `file`, `voice`, `emoticon`, `reply`, `system`, `call`, `bot`, `deleted` 등 (알 수 없는 코드는 `type_<번호>`).
 
+**메시지에 붙는 추가 필드**
+
+| 필드 | 언제 | 내용 |
+|---|---|---|
+| `attachment` | 사진·여러 장·동영상·파일·음성·이모티콘 | 종류·크기·파일명·만료 여부 등 요약 (링크 없음). 내용은 `kakao_get_attachment`로 |
+| `reply_to` | 답장 | 원본 `message_id`, 원문(200자까지), `from_me`(원본을 내가 보냈는지) |
+| `reactions` | 리액션이 있을 때 | 이모티콘 리액션 `{"emoticon": "사랑", "count", "mine"}` (현재 카카오톡 방식, 이름 정확). 예전 공감 `{"reaction": "like", "code": 2, "count", "mine"}` — 이름(heart/like/check/laugh/surprise/sad)은 추정이라 원래 번호도 함께 줍니다 |
+
+리액션은 개수와 **내가 눌렀는지**만 기록되어 있고, 누가 눌렀는지 목록은 DB에 없습니다.
+
 ### `kakao_search` — 텍스트 검색
 
 | 파라미터 | 기본값 | 설명 |
@@ -168,7 +188,7 @@ claude mcp add kakao -s user -- uv --directory ~/code/kakao-mcp run kakao-mcp
 
 최신 결과부터, 각 결과에 `chat_id`와 `message_id`가 포함됩니다. **메시지 텍스트만** 검색하므로 사진·파일은 찾지 못합니다 → `kakao_read_messages`에 기간을 주고 `type`/`sender`로 고르세요.
 
-### `kakao_get_attachment` — 사진·파일 가져오기
+### `kakao_get_attachment` — 사진·파일·이모티콘 가져오기
 
 | 파라미터 | 기본값 | 설명 |
 |---|---|---|
@@ -176,7 +196,7 @@ claude mcp add kakao -s user -- uv --directory ~/code/kakao-mcp run kakao-mcp
 | `message_id` | (필수) | `attachment`가 있는 메시지의 ID |
 | `index` | 0 | `photos`(여러 장)일 때 몇 번째 사진인지 (0 ~ count-1) |
 
-`{kind, name, size, path}` JSON을 반환하고, **사진은 에이전트가 볼 수 있게 축소한 이미지도 함께** 반환합니다. 파일·동영상·음성은 로컬 경로만 반환합니다. 파일은 `~/Library/Caches/kakao-mcp/attachments/`에 캐시됩니다(본인만 접근).
+`{kind, name, size, path}` JSON을 반환하고, **사진과 이모티콘은 에이전트가 볼 수 있게 축소한 이미지도 함께** 반환합니다. 이모티콘은 카카오 이모티콘 상점 이미지(`item.kakaocdn.net`)를 쓰며 만료되지 않습니다. 움직이는 이모티콘은 멈춘 대표 이미지(썸네일)로 보여 줍니다 — 원본 애니메이션 파일은 카카오가 보호 처리해 제공하므로 풀지 않습니다. 파일·동영상·음성은 로컬 경로만 반환합니다. 파일은 `~/Library/Caches/kakao-mcp/attachments/`에 캐시됩니다(본인만 접근).
 
 카카오 링크는 일정 기간 뒤 **만료**됩니다. `attachment.expired: true`이고 `saved_locally`가 없으면 받지 못할 가능성이 큽니다 — 카카오톡 앱에서 해당 메시지를 한 번 열면 다시 받아지는 경우가 많습니다.
 
@@ -200,8 +220,10 @@ claude mcp add kakao -s user -- uv --directory ~/code/kakao-mcp run kakao-mcp
 |---|---|
 | "민수랑 3월부터 대화 요약해줘" | `kakao_list_chats` → `kakao_read_messages(chat_id, since="2026-03-01", oldest_first=true)` → `newer_cursor`로 끝까지 |
 | "우리 1:1 대화 처음부터 다 읽어줘" | `kakao_read_messages(chat_id, oldest_first=true, limit=1000)` → `after=newer_cursor` 반복 |
+| "이 메시지에 누가 뭐라고 답했어?" | `kakao_read_messages`에서 `reply_to.message_id`가 그 메시지인 답장 찾기 |
 | "지난주에 민수가 보낸 사진 보여줘" | `kakao_read_messages(chat_id, since="7d")`에서 `type: photo`, `sender` 확인 → `kakao_get_attachment(chat_id, message_id)` |
 | "회식 장소 얘기 어디서 했지?" | `kakao_search("회식")` → 결과의 `chat_id`로 `kakao_read_messages` |
+| "나와의 채팅 내용 보여줘" | `kakao_list_chats`에서 `type: "self"`인 방 → `kakao_read_messages` |
 | "나와의 채팅에 '장보기: 우유' 보내줘" | `kakao_prepare_send("me", "장보기: 우유")` → 사용자 승인 → `kakao_confirm_send(token, "me", "장보기: 우유")` |
 
 ---
@@ -226,7 +248,7 @@ claude mcp add kakao -s user -- uv --directory ~/code/kakao-mcp run kakao-mcp
   "send": {
     "enabled": false,
     "allowed_chats": {
-      "me": "나와의 채팅에 표시되는 정확한 이름"
+      "me": "나와의 채팅 이름 (= kakao_list_chats에서 type이 self인 방의 name)"
     },
     "max_length": 1000,
     "confirm_ttl_seconds": 300
@@ -261,7 +283,9 @@ kakao-mcp (Python, 이 레포)
 
 - **[kakaocli](https://github.com/silver-flight-group/kakaocli)** — 카카오톡 DB를 복호화해 읽는 CLI. 이 프로젝트는 [포크](https://github.com/Jaeha0526/kakaocli/tree/kakao-mcp)를 사용합니다. 원본 v0.6.0에 다음을 더했습니다:
   - `history` 명령: `(sentAt, logId)` 키셋 커서 페이지네이션, 기간·검색·제외 필터, 첨부 정보 포함 JSON. **모든 값은 SQL 바인딩**으로 전달됩니다. 원본에 [PR #28](https://github.com/silver-flight-group/kakaocli/pull/28)로 제출했으며, 머지되면 원본으로 돌아갈 예정입니다.
+  - `history`에 리액션 정보 추가 (`NTChatLogMeta`)
   - [upstream PR #26](https://github.com/silver-flight-group/kakaocli/pull/26): 사용자 ID 탐색 병렬화 (+ 잠금 경합 수정)
+  - [upstream PR #25](https://github.com/silver-flight-group/kakaocli/pull/25)의 채팅방 이름 커밋: 단톡방·오픈채팅을 카카오톡과 같은 규칙으로 이름 붙임 (+ 매 호출마다 ID 재탐색하던 문제 수정, 나와의 채팅을 `self` 타입과 내 이름으로 표시). 이 PR의 전송 자동화 부분은 kakao-mcp가 kmsg로 전송하므로 가져오지 않았습니다.
 - **[kmsg](https://github.com/channprj/kmsg)** — 카카오톡 UI를 조작해 메시지를 보내는 CLI (원본 그대로 사용).
 
 두 의존성 모두 `scripts/install-deps.sh`가 **검토한 커밋에 고정**해 소스에서 빌드합니다. 커밋을 올릴 때는 차이를 검토한 뒤 바꾸세요.
@@ -290,7 +314,8 @@ kakao-mcp (Python, 이 레포)
 | 첨부 다운로드 `HTTP 404`/만료 | 카카오톡 앱에서 해당 메시지를 열어 다시 받은 뒤 재시도 |
 | Claude 데스크톱 앱에 `kakao`가 안 보임 | 앱이 켜진 상태에서 설정을 고쳐 덮어써진 것 → ⌘Q 종료 후 편집, 재실행 |
 | 보내기 실패 (`kmsg failed`) | **손쉬운 사용** 권한, 카카오톡 실행 여부, `allowed_chats`의 이름이 카카오톡에 보이는 이름과 정확히 같은지 확인 |
-| 단톡방 이름이 `(unknown)` | kakaocli의 한계. 멤버 수·최근 메시지로 식별 |
+| 단톡방 이름이 `(unknown)` | 옛 kakaocli 빌드. `./scripts/install-deps.sh`로 고정 커밋을 다시 빌드 |
+| 움직이는 이모티콘이 멈춘 그림으로 보임 | 의도된 동작 (대표 썸네일 사용) |
 
 로그: Claude 데스크톱은 `~/Library/Logs/Claude/mcp*.log`, Claude Code는 `claude --debug`.
 

@@ -126,10 +126,13 @@ def create_server(
     ) -> dict[str, Any]:
         """List KakaoTalk chats, most recently active first. Start here to get a chat_id.
 
-        Group chats often show "(unknown)" as their name. To identify one, look at
-        `members` and `last_message_at`, or call kakao_read_messages(chat_id, limit=20)
-        to see who is talking; if the user remembers a phrase from the chat,
-        kakao_search(query) returns its chat_id. Some chats may be hidden by the
+        `name` is what the KakaoTalk chat list shows: the room title, the open
+        chat's name, the other person for a 1:1 chat, or the member names for an
+        unnamed group. `type` is "direct", "group", "self" (the user's own memo
+        chat, 나와의 채팅, named after the user) or "unknown" (e.g. open chats).
+        Names aren't unique; if unsure which chat is meant, check `members` and
+        `last_message_at` or read a few messages. If the user remembers a phrase,
+        kakao_search(query) returns the chat_id. Some chats may be hidden by the
         user's config.
         """
         chats = cli.chats(_clamp(limit, 1, MAX_CHATS))
@@ -179,8 +182,14 @@ def create_server(
         Examples: whole chat from the start -> oldest_first=true, then follow
         newer_cursor. Everything since March -> since="2026-03-01", oldest_first=true.
 
-        Messages of type photo, photos (several photos), video, file and voice
-        carry an `attachment` summary; get the content with kakao_get_attachment.
+        Messages of type photo, photos (several photos), video, file, voice and
+        emoticon carry an `attachment` summary; get the content (emoticons and
+        photos as images) with kakao_get_attachment. A "reply" has `reply_to`
+        (the quoted message's id and text). `reactions` lists reactions on a
+        message: {"emoticon": name like "사랑" or "엄지척", "count", "mine"}, or for
+        older messages {"reaction": heart|like|check|laugh|surprise|sad (best-effort
+        name), "code", "count", "mine"}. Only counts and whether the user reacted
+        are recorded, not who else did.
         """
         cid = readable_chat(chat_id)
         before, after = check_cursor(before), check_cursor(after)
@@ -209,7 +218,7 @@ def create_server(
             "notice": UNTRUSTED_NOTICE,
             "chat_id": str(cid),
             "count": len(rows),
-            "messages": [message_view(m) for m in rows],
+            "messages": [message_view(m, my_user_id=config.user_id) for m in rows],
             "older_cursor": rows[0]["cursor"] if rows and has_older else None,
             "newer_cursor": rows[-1]["cursor"] if rows and has_newer else None,
         }
@@ -249,7 +258,7 @@ def create_server(
         return {
             "notice": UNTRUSTED_NOTICE,
             "count": len(rows),
-            "results": [message_view(m, include_chat=True) for m in rows],
+            "results": [message_view(m, include_chat=True, my_user_id=config.user_id) for m in rows],
             "next_cursor": rows[-1]["cursor"] if rows and more else None,
         }
 
@@ -265,11 +274,12 @@ def create_server(
             Field(description='Only for type "photos": which photo, 0 to attachment.count-1.', ge=0),
         ] = 0,
     ) -> list:
-        """Fetch the photo, video, file or voice note attached to a message.
+        """Fetch the photo, video, file, voice note or emoticon of a message.
 
         Only messages that have an `attachment` field are fetchable. Returns JSON
-        {kind, name, size, path} (path is a local file); photos also come back as
-        a downscaled image you can look at. If attachment.expired is true and
+        {kind, name, size, path} (path is a local file); photos and emoticons also
+        come back as a downscaled image you can look at (animated emoticons show
+        their first frame). If attachment.expired is true and
         saved_locally is absent, the download will probably fail; ask the user to
         open that message in KakaoTalk, then retry.
         """
