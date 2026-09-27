@@ -22,3 +22,6 @@ chats.json
 
 # Local agent tooling state
 .omc/
+
+# Unrelated project checked out inside this folder by accident
+/entropy-cone-nonlinear-optim/
