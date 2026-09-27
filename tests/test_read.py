@@ -67,13 +67,13 @@ def test_bad_inputs_are_rejected_before_calling_kakaocli(make_config, fakes):
     assert "Invalid cursor" in call_err(server, "kakao_read_messages", chat_id="1", before="1; rm")
     assert "not both" in call_err(server, "kakao_read_messages", chat_id="1", before="1.1", after="1.1")
     assert "Time must look like" in call_err(server, "kakao_read_messages", chat_id="1", since="yesterday")
-    assert "excluded" in call_err(server, "kakao_read_messages", chat_id="2")
-    assert "chat_id must be" in call_err(server, "kakao_read_messages", chat_id="1 OR 1")
+    assert "hidden" in call_err(server, "kakao_read_messages", chat_id="2")
+    assert "chat_id" in call_err(server, "kakao_read_messages", chat_id="1 OR 1")  # schema pattern rejects it
     assert fakes["calls"]() == []
 
 
 def test_large_chat_ids_round_trip_as_strings(make_config, fakes):
-    big = "9007199254740993"  # > 2**53: a double would round it to ...156
+    big = "9007199254740993"  # 2**53 + 1: a double would round it to ...992
     server = create_server(make_config())
     _, page = call(server, "kakao_read_messages", chat_id=big)
     assert page["chat_id"] == big
@@ -197,8 +197,51 @@ def test_url_allowlist(url):
 
 def test_attachment_respects_exclusion(make_config, tmp_path):
     server = create_server(make_config({"read": {"exclude_chat_ids": [1]}}), cache_dir=tmp_path)
-    assert "excluded" in call_err(server, "kakao_get_attachment", chat_id="1", message_id="105")
+    assert "hidden" in call_err(server, "kakao_get_attachment", chat_id="1", message_id="105")
 
 
 def test_time_constant():
     assert T0 == 1_790_000_000
+
+
+def test_oldest_first_reads_from_the_beginning(make_config):
+    server = create_server(make_config())
+    _, first = call(server, "kakao_read_messages", chat_id="1", limit=4, oldest_first=True)
+    assert ids(first) == ["100", "101", "102", "103"]
+    assert first["older_cursor"] is None and first["newer_cursor"]
+    seen, cursor = ids(first), first["newer_cursor"]
+    while cursor:
+        _, page = call(server, "kakao_read_messages", chat_id="1", limit=4, after=cursor)
+        seen += ids(page)
+        cursor = page["newer_cursor"]
+    assert seen == [str(i) for i in range(100, 125)]
+
+
+def test_oldest_first_respects_since(make_config):
+    server = create_server(make_config())
+    since = __import__("datetime").datetime.fromtimestamp(T0 + 20 * 60, tz=__import__("kakao_mcp.messages", fromlist=["KST"]).KST)
+    _, page = call(server, "kakao_read_messages", chat_id="1", limit=2, oldest_first=True,
+                   since=since.strftime("%Y-%m-%d %H:%M"))
+    assert ids(page) == ["120", "121"]
+
+
+def test_tool_schemas_describe_every_parameter(make_config):
+    server = create_server(make_config())
+    for tool in asyncio.run(server.list_tools()):
+        for name, prop in tool.input_schema.get("properties", {}).items():
+            assert prop.get("description"), f"{tool.name}.{name} has no description"
+
+
+def test_send_description_reflects_config(make_config):
+    def prepare_desc(extra):
+        tools = asyncio.run(create_server(make_config(extra)).list_tools())
+        return next(t for t in tools if t.name == "kakao_prepare_send").description
+
+    assert "DISABLED" in prepare_desc({})
+    on = prepare_desc({"send": {"enabled": True, "allowed_chats": {"me": "Jaeha"}}})
+    assert '"me" (KakaoTalk chat "Jaeha")' in on and "DISABLED" not in on
+
+
+def test_disabled_send_tells_agent_not_to_edit_config(make_config):
+    server = create_server(make_config())
+    assert "do not modify the config" in call_err(server, "kakao_prepare_send", chat="me", message="hi")

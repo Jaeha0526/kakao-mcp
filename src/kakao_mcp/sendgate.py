@@ -48,8 +48,8 @@ class SendGate:
     def prepare(self, alias: str, message: str) -> PendingSend:
         if not self.config.enabled:
             raise ToolError(
-                "Sending is disabled. Set send.enabled=true in ~/.config/kakao-mcp/config.json "
-                "to allow it."
+                "Sending is disabled in the user's config. Tell the user; do not modify the "
+                "config yourself (they can enable it in ~/.config/kakao-mcp/config.json)."
             )
         alias = (alias or "").strip()
         chat_name = self.config.allowed_chats.get(alias)
