@@ -42,10 +42,11 @@ def test_kakaocli_gets_db_and_key_and_resolves_once(fakes):
 
     cli = KakaoCli(fakes["kakaocli"], resolve_db=resolve)
     cli.chats(5)
-    cli.search("-x", 3)
+    cli.history(chat_id=1, contains="-x", limit=3)
     argv = fakes["calls"]()
-    assert argv[0] == ["kakaocli", "chats", "--limit", "5", "--db", "/tmp/fake.db", "--key", "SECRETKEY", "--json"]
-    assert argv[1][-2:] == ["--", "-x"]
+    assert argv[0] == ["kakaocli", "chats", "--limit", "5", "--json", "--db", "/tmp/fake.db", "--key", "SECRETKEY"]
+    assert argv[1][-4:] == ["--db", "/tmp/fake.db", "--key", "SECRETKEY"]
+    assert "--contains=-x" in argv[1]
     assert len(calls) == 1
 
 

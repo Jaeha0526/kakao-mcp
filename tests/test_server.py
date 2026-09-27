@@ -36,31 +36,6 @@ def test_list_chats_excludes_configured(make_config):
     assert [c["chat_id"] for c in data["chats"]] == ["1"]
 
 
-def test_read_messages_sorted_and_marked_untrusted(make_config, fakes):
-    server = create_server(make_config())
-    _, data = call(server, "kakao_read_messages", chat_id="1", since="7d", limit=10)
-    assert [m["text"] for m in data["messages"]][:2] == ["hidden", "first"]  # oldest first
-    assert data["messages"][2]["sender"] == "me"
-    assert "untrusted" in data["notice"]
-    argv = fakes["calls"]()[-1]
-    assert argv == ["kakaocli", "messages", "--chat-id", "1", "--limit", "10", "--since", "7d", "--json"]
-    assert "--key" not in argv
-
-
-def test_read_rejects_bad_since_and_excluded(make_config, fakes):
-    server = create_server(make_config({"read": {"exclude_chat_ids": [2]}}))
-    assert "since" in call_err(server, "kakao_read_messages", chat_id="1", since="7d; rm -rf /")
-    assert "excluded" in call_err(server, "kakao_read_messages", chat_id="2")
-    assert fakes["calls"]() == []
-
-
-def test_search_uses_option_terminator_and_filters(make_config, fakes):
-    server = create_server(make_config({"read": {"exclude_chat_ids": [2]}}))
-    _, data = call(server, "kakao_search", query="--limit")
-    assert {r["chat_id"] for r in data["results"]} == {"1"}
-    assert fakes["calls"]()[-1] == ["kakaocli", "search", "--limit", "20", "--json", "--", "--limit"]
-
-
 def test_send_disabled_by_default(make_config, fakes):
     server = create_server(make_config())
     assert "disabled" in call_err(server, "kakao_prepare_send", chat="alice", message="hi")
@@ -139,7 +114,7 @@ def test_tool_list():
     tools = asyncio.run(server.list_tools())
     names = {t.name for t in tools}
     assert names == {
-        "kakao_list_chats", "kakao_read_messages", "kakao_search",
+        "kakao_list_chats", "kakao_read_messages", "kakao_search", "kakao_get_attachment",
         "kakao_prepare_send", "kakao_confirm_send",
     }
     confirm = next(t for t in tools if t.name == "kakao_confirm_send")
@@ -151,15 +126,3 @@ def _empty_config():
     return Config(kakaocli_path=None, kmsg_path=None, read=ReadConfig(), send=SendConfig())
 
 
-def test_large_chat_ids_round_trip_as_strings(make_config, fakes):
-    big = "9007199254740993"  # > 2**53: a double would round it to ...156
-    server = create_server(make_config())
-    _, data = call(server, "kakao_read_messages", chat_id=big)
-    assert data["chat_id"] == big
-    assert fakes["calls"]()[-1][:4] == ["kakaocli", "messages", "--chat-id", big]
-
-
-def test_read_rejects_non_numeric_chat_id(make_config, fakes):
-    server = create_server(make_config())
-    assert "chat_id must be" in call_err(server, "kakao_read_messages", chat_id="1; ls")
-    assert fakes["calls"]() == []

@@ -19,13 +19,32 @@ if cmd == "chats":
         {{"id": 1, "type": "direct", "display_name": "Alice", "member_count": 2, "unread_count": 0}},
         {{"id": 2, "type": "group", "display_name": "Secret", "member_count": 5, "unread_count": 3}},
     ]))
-elif cmd in ("messages", "search"):
-    # newest first, like kakaocli
-    print(json.dumps([
-        {{"id": 11, "chat_id": 1, "sender_id": 9, "type": "text", "timestamp": "2026-09-26T10:05:00Z", "is_from_me": True, "text": "second"}},
-        {{"id": 10, "chat_id": 1, "sender_id": 8, "type": "text", "timestamp": "2026-09-26T10:00:00Z", "is_from_me": False, "sender": "Alice", "text": "first"}},
-        {{"id": 12, "chat_id": 2, "sender_id": 7, "type": "text", "timestamp": "2026-09-26T09:00:00Z", "is_from_me": False, "sender": "Bob", "text": "hidden"}},
-    ]))
+elif cmd == "history":
+    # Mirrors the kakaocli fork's `history`: filters, (sentAt, logId) keyset order.
+    opts, it = {{}}, iter(sys.argv[2:])
+    for a in it:
+        if a.startswith("--") and "=" in a:
+            k, v = a[2:].split("=", 1)
+        else:
+            k, v = a[2:], next(it)
+        opts.setdefault(k, []).append(v)
+    one = lambda k: opts.get(k, [None])[0]
+    rows = json.load(open(os.environ["FAKE_DB"]))
+    def key(m): return (m["sent_at"], m["log_id"])
+    def cur(c): s, l = c.split("."); return (int(s), int(l))
+    if one("chat-id"): rows = [m for m in rows if m["chat_id"] == int(one("chat-id"))]
+    ex = {{int(x) for x in opts.get("exclude-chat-id", [])}}
+    rows = [m for m in rows if m["chat_id"] not in ex]
+    if one("log-id"): rows = [m for m in rows if m["log_id"] == int(one("log-id"))]
+    if one("since"): rows = [m for m in rows if m["sent_at"] >= int(one("since"))]
+    if one("until"): rows = [m for m in rows if m["sent_at"] <= int(one("until"))]
+    if one("before"): rows = [m for m in rows if key(m) < cur(one("before"))]
+    if one("after"): rows = [m for m in rows if key(m) > cur(one("after"))]
+    if one("contains"): rows = [m for m in rows if one("contains") in (m.get("text") or "")]
+    rows.sort(key=key, reverse=one("after") is None)
+    rows = rows[: int(one("limit"))]
+    for m in rows: m["cursor"] = f"{{m['sent_at']}}.{{m['log_id']}}"
+    print(json.dumps(rows))
 else:
     sys.exit(2)
 '''
@@ -44,10 +63,41 @@ def _write_exe(path: Path, body: str) -> str:
     return str(path)
 
 
+T0 = 1_790_000_000
+PHOTO = json.dumps({"url": "https://talk.kakaocdn.net/dn/a/i_photo.jpg", "w": 800, "h": 600, "s": 1234,
+                    "expire": 9_999_999_999_999})
+PHOTOS = json.dumps({"imageUrls": ["https://talk.kakaocdn.net/dn/b/1.jpg", "https://talk.kakaocdn.net/dn/b/2.png"],
+                     "expire": 9_999_999_999_999})
+FILE = json.dumps({"url": "https://talk.kakaocdn.net/dn/c/f", "name": "report.pdf", "size": 99, "expire": 1})
+EVIL = json.dumps({"url": "http://evil.example/x.jpg"})
+
+
+def fake_messages():
+    """Chat 1: 25 messages (log 100..124); logs 110 and 111 share a second.
+    Chat 2: 3 messages that config may exclude."""
+    rows = []
+    for i in range(25):
+        rows.append({
+            "log_id": 100 + i, "chat_id": 1, "sender_id": 9 if i % 2 else 8,
+            "sender": "Alice", "type_code": 1, "sent_at": T0 + (i if i != 11 else 10) * 60,
+            "is_from_me": bool(i % 2), "text": f"msg {i}" + (" lunch" if i in (3, 20) else ""),
+        })
+    for log_id, code, att in ((105, 2, PHOTO), (106, 27, PHOTOS), (107, 18, FILE), (108, 2, EVIL)):
+        r = rows[log_id - 100]
+        r.update(type_code=code, attachment=att, text=None)
+    for i in range(3):
+        rows.append({"log_id": 200 + i, "chat_id": 2, "sender_id": 7, "sender": "Bob", "type_code": 1,
+                     "sent_at": T0 + i * 60, "is_from_me": False, "text": "hidden lunch"})
+    return rows
+
+
 @pytest.fixture
 def fakes(tmp_path, monkeypatch):
     log = tmp_path / "calls.log"
     monkeypatch.setenv("FAKE_LOG", str(log))
+    db = tmp_path / "fake_db.json"
+    db.write_text(json.dumps(fake_messages()))
+    monkeypatch.setenv("FAKE_DB", str(db))
     kakaocli = _write_exe(tmp_path / "kakaocli", FAKE_KAKAOCLI)
     kmsg = _write_exe(tmp_path / "kmsg", FAKE_KMSG)
 

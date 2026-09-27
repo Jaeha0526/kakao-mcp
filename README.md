@@ -3,7 +3,7 @@
 macOS 카카오톡을 Claude Code 같은 MCP 클라이언트에서 쓰기 위한 개인용 MCP 서버입니다.
 *A personal KakaoTalk MCP server for macOS: read from the local DB, send through a gated, allowlisted flow.*
 
-- **읽기**: [kakaocli](https://github.com/silver-flight-group/kakaocli)로 카카오톡 로컬 DB를 **읽기 전용**으로 조회합니다. 카카오톡 창을 띄우지 않고, **읽음 처리도 되지 않습니다.**
+- **읽기**: [kakaocli](https://github.com/silver-flight-group/kakaocli)([포크](https://github.com/Jaeha0526/kakaocli/tree/kakao-mcp): 커서 페이지네이션용 `history` 명령 추가)로 카카오톡 로컬 DB를 **읽기 전용**으로 조회합니다. 카카오톡 창을 띄우지 않고, **읽음 처리도 되지 않습니다.** 대화방 전체를 처음까지 페이지로 넘겨 읽을 수 있습니다.
 - **보내기**: [kmsg](https://github.com/channprj/kmsg)의 UI 자동화로 보냅니다. 기본은 **꺼져 있고**, 허용한 채팅방에만 **준비 → 확인** 2단계로 보냅니다.
 
 > 비공식 도구입니다. 카카오 공식 API가 아니며, 카카오톡 업데이트로 언제든 동작하지 않을 수 있습니다. 대량 발송·스팸 등 남용에 따른 책임은 사용자에게 있습니다.
@@ -13,12 +13,15 @@ macOS 카카오톡을 Claude Code 같은 MCP 클라이언트에서 쓰기 위한
 | 도구 | 설명 |
 |---|---|
 | `kakao_list_chats` | 최근 활동순 채팅방 목록 (chat_id, 이름, 안 읽은 수) |
-| `kakao_read_messages` | 채팅방 메시지 읽기 (`since`: `30m`, `12h`, `7d`, `2w`) |
-| `kakao_search` | 전체 대화 키워드 검색 |
+| `kakao_read_messages` | 채팅방 메시지를 페이지 단위로 읽기. 기본 100개/최대 1000개(`limit`), `before`/`after` 커서로 처음까지, `since`/`until` 기간 필터(`7d`, `2026-03-01`) |
+| `kakao_search` | 키워드 검색 (특정 방 한정 가능, `next_cursor`로 페이지 넘김) |
+| `kakao_get_attachment` | `message_id`로 사진·파일·동영상·음성 가져오기. 사진은 이미지로 반환 |
 | `kakao_prepare_send` | 보낼 메시지를 검증하고 대기시킴 (**보내지 않음**) |
 | `kakao_confirm_send` | 대기 중인 메시지를 실제로 전송 (**되돌릴 수 없음**) |
 
-이미지·파일 전송은 의도적으로 넣지 않았습니다 (로컬 파일 유출 경로가 되기 때문).
+메시지 목록에는 사진·파일이 `{"kind": "photo", "size": ...}` 같은 요약으로만 나오고, 내용은 `kakao_get_attachment`로 따로 가져옵니다. 다운로드는 카카오 CDN(HTTPS)만 허용하며 `~/Library/Caches/kakao-mcp/`(본인만 접근)에 캐시됩니다. 카카오 링크는 일정 기간 뒤 만료되어, 오래된 첨부는 받지 못할 수 있습니다.
+
+이미지·파일 **전송**은 의도적으로 넣지 않았습니다 (로컬 파일 유출 경로가 되기 때문).
 
 ## 안전 설계
 
@@ -67,7 +70,11 @@ cp config.example.json ~/.config/kakao-mcp/config.json
   "kmsg_path": null,
   "read": {
     "exclude_chat_ids": [],
-    "max_messages": 200
+    "default_messages": 100,
+    "max_messages": 1000
+  },
+  "media": {
+    "max_download_mb": 200
   },
   "send": {
     "enabled": true,
@@ -100,6 +107,7 @@ claude mcp add kakao -s user -- uv --directory ~/code/kakao-mcp run kakao-mcp
       "mcp__kakao__kakao_list_chats",
       "mcp__kakao__kakao_read_messages",
       "mcp__kakao__kakao_search",
+      "mcp__kakao__kakao_get_attachment",
       "mcp__kakao__kakao_prepare_send"
     ],
     "ask": [

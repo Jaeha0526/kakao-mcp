@@ -5,8 +5,10 @@
 # checks before PATH. Bump a pin only after reviewing the diff between commits.
 set -euo pipefail
 
-KAKAOCLI_REPO="https://github.com/silver-flight-group/kakaocli.git"
-KAKAOCLI_COMMIT="8b6ffcfdaebc592a735dc1a8bd5e50037e626406"  # v0.6.0, reviewed 2026-09-26
+# Fork of silver-flight-group/kakaocli v0.6.0 (8b6ffcf, reviewed 2026-09-26) plus
+# the `history` command (cursor pagination + attachments) that kakao-mcp needs.
+KAKAOCLI_REPO="https://github.com/Jaeha0526/kakaocli.git"
+KAKAOCLI_COMMIT="feb72c3f5da7fd900917ea2611a633ad5c1ca682"  # branch kakao-mcp
 
 KMSG_REPO="https://github.com/channprj/kmsg.git"
 KMSG_COMMIT="54cbff790b409214735ef365a621d791034fe500"      # v1.260921.0, reviewed 2026-09-26
@@ -29,6 +31,7 @@ checkout() {  # repo commit dir
   if [ ! -d "$dir/.git" ]; then
     git clone --quiet "$repo" "$dir"
   fi
+  git -C "$dir" remote set-url origin "$repo"
   git -C "$dir" fetch --quiet origin
   git -C "$dir" -c advice.detachedHead=false checkout --quiet "$commit"
   local head

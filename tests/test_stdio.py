@@ -31,7 +31,7 @@ def test_stdio_roundtrip(fakes, tmp_path):
             return tools, chats, prep, bad
 
     tools, chats, prep, bad = asyncio.run(run())
-    assert len(tools.tools) == 5
+    assert len(tools.tools) == 6
     assert json.loads(chats.content[0].text)["chats"][0]["name"] == "Alice"
     assert json.loads(prep.content[0].text)["chat_name"] == "Alice Kim"
     assert bad.is_error and "not in send.allowed_chats" in bad.content[0].text

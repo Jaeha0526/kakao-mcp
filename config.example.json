@@ -4,7 +4,11 @@
   "kmsg_path": null,
   "read": {
     "exclude_chat_ids": [],
-    "max_messages": 200
+    "default_messages": 100,
+    "max_messages": 1000
+  },
+  "media": {
+    "max_download_mb": 200
   },
   "send": {
     "enabled": false,

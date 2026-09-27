@@ -24,7 +24,15 @@ class ConfigError(Exception):
 @dataclass(frozen=True)
 class ReadConfig:
     exclude_chat_ids: frozenset[int] = frozenset()
-    max_messages: int = 200
+    # Messages per page when the caller doesn't pass a limit, and the most a
+    # caller may ask for in one page. Older pages are reached with cursors.
+    default_messages: int = 100
+    max_messages: int = 1000
+
+
+@dataclass(frozen=True)
+class MediaConfig:
+    max_download_mb: int = 200
 
 
 @dataclass(frozen=True)
@@ -42,6 +50,7 @@ class Config:
     kmsg_path: str | None
     read: ReadConfig
     send: SendConfig
+    media: MediaConfig = MediaConfig()
     # KakaoTalk internal numeric user id. Only needed when kakaocli cannot
     # auto-detect it; kakao-mcp then derives the DB key and passes --db/--key.
     user_id: int | None = None
@@ -77,8 +86,12 @@ def load_config(path: Path | None = None) -> Config:
     try:
         read = ReadConfig(
             exclude_chat_ids=frozenset(int(x) for x in read_raw.get("exclude_chat_ids", [])),
-            max_messages=int(read_raw.get("max_messages", 200)),
+            default_messages=int(read_raw.get("default_messages", 100)),
+            max_messages=int(read_raw.get("max_messages", 1000)),
         )
+        if not 1 <= read.default_messages <= read.max_messages <= 5000:
+            raise ConfigError("need 1 <= read.default_messages <= read.max_messages <= 5000")
+        media = MediaConfig(max_download_mb=int((raw.get("media") or {}).get("max_download_mb", 200)))
         allowed = send_raw.get("allowed_chats", {})
         if not isinstance(allowed, dict):
             raise ConfigError("send.allowed_chats must be an object of {alias: chat name}")
@@ -98,5 +111,6 @@ def load_config(path: Path | None = None) -> Config:
         kmsg_path=_resolve_binary(raw.get("kmsg_path"), "kmsg"),
         read=read,
         send=send,
+        media=media,
         user_id=user_id,
     )

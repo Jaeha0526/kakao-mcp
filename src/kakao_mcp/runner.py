@@ -1,21 +1,18 @@
 """Thin subprocess wrappers around the kakaocli and kmsg binaries.
 
-Arguments are always passed as a list (never through a shell), and the DB key
-is never passed on the command line: kakaocli derives it itself.
+Arguments are always passed as a list (never through a shell). kakaocli
+derives the DB key itself unless the config sets user_id, in which case the key
+is passed with --key and redacted from error messages.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import re
 import subprocess
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from mcp.server.mcpserver.exceptions import ToolError as _SdkToolError
-
-SINCE_PATTERN = re.compile(r"^\d{1,4}[smhdw]$")
-
 
 class ToolError(_SdkToolError):
     """An anticipated failure; the MCP SDK shows its message to the client."""
@@ -84,14 +81,9 @@ class KakaoCli:
         path, key = self._db
         return ["--db", path, "--key", key], (key,)
 
-    def _json(self, args: list[str], positional: list[str] | None = None) -> list[dict[str, Any]]:
+    def _call(self, args: list[str]) -> list[dict[str, Any]]:
         db_args, secrets = self._db_args()
-        argv = [*args, *db_args, "--json"]
-        if positional:
-            # "--" stops option parsing so user text starting with "-" stays positional.
-            argv += ["--", *positional]
-        out = _run(self.binary, "kakaocli", argv, self.timeout, secrets)
-        out = out.strip()
+        out = _run(self.binary, "kakaocli", [*args, *db_args], self.timeout, secrets).strip()
         if not out:
             return []
         try:
@@ -103,18 +95,45 @@ class KakaoCli:
         return data
 
     def chats(self, limit: int) -> list[dict[str, Any]]:
-        return self._json(["chats", "--limit", str(limit)])
+        return self._call(["chats", "--limit", str(int(limit)), "--json"])
 
-    def messages(self, chat_id: int, since: str | None, limit: int) -> list[dict[str, Any]]:
-        args = ["messages", "--chat-id", str(int(chat_id)), "--limit", str(limit)]
+    def history(
+        self,
+        *,
+        chat_id: int | None = None,
+        exclude_chat_ids: Iterable[int] = (),
+        log_id: int | None = None,
+        since: int | None = None,
+        until: int | None = None,
+        before: str | None = None,
+        after: str | None = None,
+        contains: str | None = None,
+        limit: int = 100,
+    ) -> list[dict[str, Any]]:
+        """Cursor-paginated messages (requires the kakaocli fork's `history` command).
+
+        Newest-first, or oldest-first when `after` is given. Cursors are
+        "<sentAt>.<logId>" strings taken from previous results.
+        """
+        args = ["history", "--limit", str(int(limit))]
+        if chat_id is not None:
+            args += ["--chat-id", str(int(chat_id))]
+        for cid in exclude_chat_ids:
+            args += ["--exclude-chat-id", str(int(cid))]
+        if log_id is not None:
+            args += ["--log-id", str(int(log_id))]
         if since is not None:
-            if not SINCE_PATTERN.match(since):
-                raise ToolError("since must look like 30m, 12h, 7d or 2w")
-            args += ["--since", since]
-        return self._json(args)
-
-    def search(self, query: str, limit: int) -> list[dict[str, Any]]:
-        return self._json(["search", "--limit", str(limit)], positional=[query])
+            args += ["--since", str(int(since))]
+        if until is not None:
+            args += ["--until", str(int(until))]
+        if before is not None:
+            args += [f"--before={before}"]
+        if after is not None:
+            args += [f"--after={after}"]
+        if contains is not None:
+            # "--opt=value" keeps text that starts with "-" from being read as an option.
+            args += [f"--contains={contains}"]
+        return self._call(args)
 
 
 class Kmsg:
